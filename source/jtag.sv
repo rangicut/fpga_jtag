@@ -10,7 +10,7 @@
 
 module jtag
     #(
-    parameter DATA_INSTRACTION = 10,
+    parameter DATA_INSTRUCTION = 10,
     parameter DATA_FIFO = 8,
     parameter FIFO_DEPTH = 16
     )
@@ -29,19 +29,19 @@ module jtag
     output logic tdi,
     output logic tck,
     output logic tms,
-    //FIFO_instraction
-    output logic [(DATA_INSTRACTION-1):0] wdata_instraction,
-    output logic wr_instraction,
-    input logic full_instraction,
-    input logic  [(DATA_INSTRACTION-1):0] rdata_instraction,
-    output logic rd_instraction,
-    input logic empty_instraction,
-    input logic [($clog2(FIFO_DEPTH) - 1):0] usedw_instraction,
+    //FIFO_instruction
+    output logic [(DATA_INSTRUCTION-1):0] wdata_instruction,
+    output logic wr_instruction,
+    input logic full_instruction,
+    input logic  [(DATA_INSTRUCTION-1):0] rdata_instruction,
+    output logic rd_instruction,
+    input logic empty_instruction,
+    input logic [($clog2(FIFO_DEPTH) - 1):0] usedw_instruction,
     //FIFO_data
-    output logic [(DATA_DATA-1):0] wdata_data,
+    output logic [(DATA_FIFO-1):0] wdata_data,
     output logic wr_data,
     input logic full_data,
-    input logic  [(DATA_DATA-1):0] rdata_data,
+    input logic  [(DATA_FIFO-1):0] rdata_data,
     output logic rd_data,
     input logic empty_data,
     input logic [($clog2(FIFO_DEPTH) - 1):0] usedw_data
@@ -51,12 +51,10 @@ module jtag
 //Local types
 //////////////////////////////////////////////////
 
-typedef enum {ST_IDLE, ST_INSTRACTION, ST_TDI, ST_TDO, ST_PRE_TDO, ST_PRE_TDI, ST_PRE_INSTRACTION} state_type;
-
-//frequency divider
-localparam FREQUENCY_DIVIDER = 1;
+typedef enum {ST_IDLE, ST_TMS, ST_INSTRUCTION, ST_DATA, ST_DELAY} state_type;
 
 //initial constants
+localparam FREQUENCY_DIVIDER = 1;
 localparam DATA_TMS = 4;
 localparam GO_SHIFT_IR = 4'b1100;
 localparam GO_SHIFT_DR = 4'b0100;
@@ -68,17 +66,20 @@ localparam GO_EXIT = 4'b1100;
 
 state_type state;
 state_type state_reserved;
-logic [3:0] count;  //counter
+logic flag_exit;
+logic enable_tck;
+logic [3:0] count;
+logic [7:0] count_transaction;
 //shift registers
 logic [(DATA_TMS - 1) :0] shift_tms;
-logic [(DATA_INSTRACTION - 1) :0] shift_instraction;
+logic [(DATA_INSTRUCTION - 1) :0] shift_instruction;
 
 //////////////////////////////////////////////////
 //tms and tdi retiming
 //////////////////////////////////////////////////
 
 assign tms = shift_tms [(DATA_TMS - 1)];
-assign tdi = shift_instraction [(DATA_INSTRACTION - 1)];
+assign tdi = shift_instruction [(DATA_INSTRUCTION - 1)];
 
 //////////////////////////////////////////////////
 //Control FSM
@@ -86,27 +87,136 @@ assign tdi = shift_instraction [(DATA_INSTRACTION - 1)];
 
 always_ff @(posedge clk) begin
     if(rst) begin
-        shift_instraction <= 0;
+        flag_exit <= 0;
+        enable_tck <= 0;
+        tck <= 0;
+        count <= 0;
+        count_transaction <= 0;
+        shift_instruction <= 0;
         shift_tms <= 0;
         state <= ST_IDLE;
-        rd_data <=0; rd_instraction <=0; 
-        busy <=0;
+        state_reserved <= ST_IDLE;
+        rd_data <= 0; rd_instruction <= 0; 
+        busy <= 0;
     end 
     else begin
         case (state)
             //////////////////////////////////////////////////
             ST_IDLE : begin
-                shift_instraction <= 0;
+                flag_exit <= 0;
+                enable_tck <= 0;
+                tck <= 0;
+                busy <= 0;
+                count <= 0;
+                count_transaction <= 0;
+                shift_instruction <= 0;
                 shift_tms <= 0;
-                rd_data <=0; rd_instraction <=0; 
-                if ((work == 1) && (op == 0)) begin
-                    state <= ST_PRE_INSTRACTION;
+                rd_data <= 0; rd_instruction <= 0; 
+                if (work == 1) begin
+                    state <= ST_DELAY;
+                    state_reserved <= ST_TMS;
                     busy <= 1;
+                    if (op == 0) begin
+                        shift_tms <= GO_SHIFT_IR;
+                    end
+                    else begin
+                        shift_tms <= GO_SHIFT_DR;
+                    end
                 end 
-                if ((work == 1) && (op == 1)) begin
-                    state <= ST_PRE_TDO;
-                    busy <= 1;
-                end 
+            end
+            //////////////////////////////////////////////////
+            ST_INSTRUCTION : begin
+                tck <= 0;
+                count <= 0;
+                if (count_transaction == 0) begin
+                    shift_instruction [(DATA_INSTRUCTION - 1):0] <= rdata_instruction [(DATA_INSTRUCTION - 1):0]; 
+                    enable_tck <= 1;
+                    state <= ST_DELAY;
+                    state_reserved <= ST_INSTRUCTION;
+                    count_transaction <= count_transaction + 1;
+                end
+                else if (count_transaction == DATA_TMS) begin
+                    enable_tck <= 0;
+                    state <= ST_DELAY;
+                    state_reserved <= ST_INSTRUCTION;
+                    count_transaction <= count_transaction + 1;
+                    shift_instruction <= {shift_instruction [(DATA_INSTRUCTION - 2):0], 1'b0};
+                end
+                if (count_transaction == (DATA_INSTRUCTION + 1)) begin
+                    state <= ST_DELAY;
+                    state_reserved <= ST_TMS;
+                    count_transaction <= 0;
+                    flag_exit <= 1;
+                    shift_tms <= GO_EXIT;
+                    enable_tck <= 0;
+                end
+                else begin
+                    enable_tck <= 1;
+                    state <= ST_DELAY;
+                    state_reserved <= ST_INSTRUCTION;
+                    count_transaction <= count_transaction + 1;
+                    shift_instruction <= {shift_instruction [(DATA_INSTRUCTION - 2):0], 1'b0};
+                end
+            end
+            //////////////////////////////////////////////////
+            ST_TMS : begin
+                tck <= 0;
+                count <= 0;
+                if (count_transaction == 0) begin
+                    enable_tck <= 1;
+                    state <= ST_DELAY;
+                    state_reserved <= ST_TMS;
+                    count_transaction <= count_transaction + 1;
+                end
+                else if (count_transaction == DATA_TMS) begin
+                    enable_tck <= 0;
+                    state <= ST_DELAY;
+                    state_reserved <= ST_TMS;
+                    count_transaction <= count_transaction + 1;
+                    shift_tms <= {shift_tms [(DATA_TMS - 2):0], 1'b0};
+                end
+                else if (count_transaction == (DATA_TMS + 1)) begin
+                    if (op == 0) begin
+                        flag_exit <= 0;
+                        enable_tck <= 0;
+                        state <= ST_DELAY;
+                        count_transaction <= 0;
+                        rd_instruction <= 1;
+                        if (flag_exit == 1) begin
+                            state_reserved <= ST_IDLE;
+                        end 
+                        else begin
+                            state_reserved <= ST_INSTRUCTION;
+                        end
+                    end 
+                    else begin
+                        enable_tck <= 0;
+                        state <= ST_DELAY;
+                        state_reserved <= ST_DATA;
+                        count_transaction <= 0;
+                        shift_instruction <= 0;
+                    end
+                end
+                else begin
+                    enable_tck <= 1;
+                    state <= ST_DELAY;
+                    state_reserved <= ST_TMS;
+                    count_transaction <= count_transaction + 1;
+                    shift_tms <= {shift_tms [(DATA_TMS - 2):0], 1'b0};
+                end
+            end
+            //////////////////////////////////////////////////
+            ST_DELAY : begin
+                if (count < (FREQUENCY_DIVIDER - 1)) begin
+                    count <= count + 1;
+                end
+                else begin
+                    state <= state_reserved;
+                    if (enable_tck == 1) begin
+                        tck <= 1;
+                        enable_tck <= 0;
+                    end
+                end
             end
             //////////////////////////////////////////////////
             default : begin 
