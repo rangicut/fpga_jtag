@@ -20,7 +20,6 @@ module jtag
     input logic clk,
     input logic rst,
     //CONTROL
-    input logic [15:0] len,
     input logic op, //type of transaction, 1-data, 0-instruction
     input logic work,
     output logic busy,
@@ -128,6 +127,7 @@ always_ff @(posedge clk) begin
             ST_INSTRUCTION : begin
                 tck <= 0;
                 count <= 0;
+                rd_instruction <= 0; 
                 if (count_transaction == 0) begin
                     enable_tck <= 1;
                     state <= ST_DELAY;
@@ -135,13 +135,6 @@ always_ff @(posedge clk) begin
                     count_transaction <= count_transaction + 1;
                 end
                 else if (count_transaction == DATA_INSTRUCTION) begin
-                    enable_tck <= 0;
-                    state <= ST_DELAY;
-                    state_reserved <= ST_INSTRUCTION;
-                    count_transaction <= count_transaction + 1;
-                    shift_instruction <= {1'b0, shift_instruction [(DATA_INSTRUCTION - 1):1]};
-                end
-                else if (count_transaction == (DATA_INSTRUCTION + 1)) begin
                     state <= ST_DELAY;
                     state_reserved <= ST_TMS;
                     count_transaction <= 0;
@@ -166,24 +159,28 @@ always_ff @(posedge clk) begin
                     state <= ST_DELAY;
                     state_reserved <= ST_DATA;
                     count_transaction <= count_transaction + 1;
+                    rd_data <= 0;
                 end
-                else if (count_transaction == (DATA_FIFO) begin
-                    enable_tck <= 0;
-                    state <= ST_DELAY;
-                    state_reserved <= ST_DATA;
-                    count_transaction <= count_transaction + 1;
-                    shift_instruction <= {2'b0, tdo, shift_instruction [(DATA_FIFO - 1):1]};
-                end
-                else if (count_transaction == (DATA_FIFO + 1)) begin
+                else if (count_transaction == (DATA_FIFO * 4)) begin
                     state <= ST_DELAY;
                     state_reserved <= ST_TMS;
                     count_transaction <= 0;
                     flag_exit <= 1;
                     shift_tms <= GO_EXIT;
                     enable_tck <= 0;
+                    rd_data <= 0;
+                end
+                else if (((!count_transaction [0]) && (!count_transaction [1]) && (!count_transaction [2])) == 1) begin
+                    state <= ST_DELAY;
+                    state_reserved <= ST_DATA;
+                    shift_instruction [(DATA_INSTRUCTION - 1):0] <= {2'b0, rdata_data [(DATA_FIFO - 1):0]};
+                    enable_tck <= 1;
+                    rd_data <= 1;
+                    count_transaction <= count_transaction + 1;
                 end
                 else begin
                     enable_tck <= 1;
+                    rd_data <= 0;
                     state <= ST_DELAY;
                     state_reserved <= ST_DATA;
                     count_transaction <= count_transaction + 1;
@@ -201,25 +198,18 @@ always_ff @(posedge clk) begin
                     count_transaction <= count_transaction + 1;
                 end
                 else if (count_transaction == DATA_TMS) begin
-                    enable_tck <= 0;
-                    state <= ST_DELAY;
-                    state_reserved <= ST_TMS;
-                    count_transaction <= count_transaction + 1;
-                    shift_tms <= {shift_tms [(DATA_TMS - 2):0], 1'b0};
-                end
-                else if (count_transaction == (DATA_TMS + 1)) begin
                     if (op == 0) begin
                         flag_exit <= 0;
                         enable_tck <= 0;
                         state <= ST_DELAY;
                         count_transaction <= 0;
-                        shift_instruction [(DATA_INSTRUCTION - 1):0] <= rdata_instruction [(DATA_INSTRUCTION - 1):0];
-                        rd_instruction <= 1; 
                         if (flag_exit == 1) begin
                             state_reserved <= ST_IDLE;
                         end 
                         else begin
                             state_reserved <= ST_INSTRUCTION;
+                            rd_instruction <= 1; 
+                            shift_instruction [(DATA_INSTRUCTION - 1):0] <= rdata_instruction [(DATA_INSTRUCTION - 1):0];
                         end
                     end 
                     else begin
@@ -227,13 +217,13 @@ always_ff @(posedge clk) begin
                         enable_tck <= 0;
                         state <= ST_DELAY;
                         count_transaction <= 0;
-                        shift_instruction [(DATA_INSTRUCTION - 1):0] <= {2'b0, rdata_data [(DATA_FIFO - 1):0]};
-                        rd_data <= 1;
                         if (flag_exit == 1) begin
                             state_reserved <= ST_IDLE;
                         end 
                         else begin
                             state_reserved <= ST_DATA;
+                            shift_instruction [(DATA_INSTRUCTION - 1):0] <= {2'b0, rdata_data [(DATA_FIFO - 1):0]};
+                            rd_data <= 1;
                         end
                     end
                 end
