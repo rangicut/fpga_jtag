@@ -29,28 +29,20 @@ module jtag
     output logic tck,
     output logic tms,
     //FIFO_instruction
-    output logic [(DATA_INSTRUCTION-1):0] wdata_instruction,
-    output logic wr_instruction,
-    input logic full_instruction,
-    input logic  [(DATA_INSTRUCTION-1):0] rdata_instruction,
+    input logic  [(DATA_INSTRUCTION - 1):0] rdata_instruction,
     output logic rd_instruction,
     input logic empty_instruction,
-    input logic [($clog2(FIFO_DEPTH) - 1):0] usedw_instruction,
     //FIFO_data
-    output logic [(DATA_FIFO-1):0] wdata_data,
-    output logic wr_data,
-    input logic full_data,
-    input logic  [(DATA_FIFO-1):0] rdata_data,
+    input logic  [(DATA_FIFO - 1):0] rdata_data,
     output logic rd_data,
-    input logic empty_data,
-    input logic [($clog2(FIFO_DEPTH) - 1):0] usedw_data
+    input logic empty_data
     );
 
 //////////////////////////////////////////////////
 //Local types
 //////////////////////////////////////////////////
 
-typedef enum {ST_IDLE, ST_TMS, ST_INSTRUCTION, ST_DATA, ST_DELAY} state_type;
+typedef enum {ST_IDLE, ST_TMS, ST_INSTRUCTION, ST_DATA, ST_DELAY, ST_RES} state_type;
 
 //initial constants
 localparam FREQUENCY_DIVIDER = 1;
@@ -93,10 +85,11 @@ always_ff @(posedge clk) begin
         count_transaction <= 0;
         shift_instruction <= 0;
         shift_tms <= 0;
-        state <= ST_IDLE;
+        state <= ST_RES;
         state_reserved <= ST_IDLE;
-        rd_data <= 0; rd_instruction <= 0; 
-        busy <= 0;
+        rd_data <= 0; 
+        rd_instruction <= 0; 
+        busy <= 1;
     end 
     else begin
         case (state)
@@ -110,7 +103,8 @@ always_ff @(posedge clk) begin
                 count_transaction <= 0;
                 shift_instruction <= 0;
                 shift_tms <= 0;
-                rd_data <= 0; rd_instruction <= 0; 
+                rd_data <= 0; 
+                rd_instruction <= 0; 
                 if (work == 1) begin
                     state <= ST_DELAY;
                     state_reserved <= ST_TMS;
@@ -122,6 +116,30 @@ always_ff @(posedge clk) begin
                         shift_tms <= GO_SHIFT_DR;
                     end
                 end 
+            end
+            //////////////////////////////////////////////////
+            ST_RES : begin
+                tck <= 0;
+                count <= 0;
+                if (count_transaction == 0) begin
+                    enable_tck <= 1;
+                    state <= ST_DELAY;
+                    state_reserved <= ST_RES;
+                    count_transaction <= count_transaction + 1;
+                end
+                else if (count_transaction == DATA_TMS) begin
+                    enable_tck <= 0;
+                    state <= ST_DELAY;
+                    state_reserved <= ST_IDLE;
+                    shift_tms <= {shift_tms [(DATA_TMS - 2):0], 1'b0};
+                end
+                else begin
+                    enable_tck <= 1;
+                    state <= ST_DELAY;
+                    state_reserved <= ST_RES;
+                    count_transaction <= count_transaction + 1;
+                    shift_tms <= {shift_tms [(DATA_TMS - 2):0], 1'b0};
+                end
             end
             //////////////////////////////////////////////////
             ST_INSTRUCTION : begin
