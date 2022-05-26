@@ -61,7 +61,7 @@ logic busy;
 //////////////////////////////////////////////////
 //reset counter for debugging
 //////////////////////////////////////////////////
-/*always_ff @(posedge clk) begin
+always_ff @(posedge clk) begin
     if (countrst == 0) begin
         rst <= 0;
         countrst <= countrst + 1;
@@ -77,12 +77,12 @@ logic busy;
         countrst <= 500000002;
         rst <= 0;
     end
-end*/
+end
 
 //////////////////////////////////////////////////
 //reset counter for modeling
 //////////////////////////////////////////////////
-always_ff @(posedge clk) begin
+/*always_ff @(posedge clk) begin
     if (countrst == 0) begin
         rst <= 0;
         countrst <= countrst + 1;
@@ -98,7 +98,7 @@ always_ff @(posedge clk) begin
         countrst <= 52;
         rst <= 0;
     end
-end
+end*/
 
 //////////////////////////////////////////////////
 //buffer fifo
@@ -134,11 +134,6 @@ jtag #(.FIFO_DEPTH(FIFO_DEPTH), .DATA_INSTRUCTION(DATA_INSTRUCTION), .DATA_FIFO(
         .tdo(tdo), .tdi(tdi), .tck(tck), .tms(tms)
     );
 
-rvjtag_tap #()
-    rvjtag_tap_inst ( 
-        .tdo(tdo), .tdi(tdi), .tck(tck), .tms(tms)
-    );
-
 jtag_fsm #(.FIFO_DEPTH(FIFO_DEPTH), .DATA_INSTRUCTION(DATA_INSTRUCTION), .DATA_FIFO(DATA_FIFO))
     jtag_fsm_inst (
         .clk(clk), .rst(rst),
@@ -150,8 +145,8 @@ jtag_fsm #(.FIFO_DEPTH(FIFO_DEPTH), .DATA_INSTRUCTION(DATA_INSTRUCTION), .DATA_F
     );
 
 pll pll_inst (
-        .refclk(clknotpll), .rst(0),
-        .outclk_0(clk)
+        .inclk0(clknotpll), .areset(0),
+        .c0(clk)
     ); 
 
 //////////////////////////////////////////////////

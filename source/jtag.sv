@@ -42,10 +42,10 @@ module jtag
 //Local types
 //////////////////////////////////////////////////
 
-typedef enum {ST_IDLE, ST_TMS, ST_INSTRUCTION, ST_DATA, ST_DELAY, ST_RES} state_type;
+typedef enum logic [3:0] {ST_IDLE, ST_TMS, ST_INSTRUCTION, ST_DATA, ST_DELAY, ST_RES} state_type;
 
 //initial constants
-localparam FREQUENCY_DIVIDER = 1;
+localparam FREQUENCY_DIVIDER = 5;
 localparam DATA_TMS = 4;
 localparam GO_SHIFT_IR = 4'b1100;
 localparam GO_SHIFT_DR = 4'b0100;
@@ -257,6 +257,12 @@ always_ff @(posedge clk) begin
             ST_DELAY : begin
                 if (count < (FREQUENCY_DIVIDER - 1)) begin
                     count <= count + 1;
+                end
+                else if (count < (FREQUENCY_DIVIDER * 2 - 2)) begin
+                    count <= count + 1;
+                    if (enable_tck == 1) begin
+                        tck <= 1;
+                    end
                 end
                 else begin
                     state <= state_reserved;

@@ -39,7 +39,7 @@ module jtag_fsm
 //Local types
 //////////////////////////////////////////////////
 
-typedef enum {ST_IDLE, ST_WR_INSTRUCTION, 
+typedef enum logic [3:0] {ST_IDLE, ST_WR_INSTRUCTION, 
 ST_WR_DATA, ST_DELAY} state_type;
 
 //initial constants
@@ -96,7 +96,7 @@ always_ff @(posedge clk) begin
                 end 
                 else if (index == 0) begin
                     wr_instruction <= 1;
-                    wdata_instruction <= 10'b1000100000; 
+                    wdata_instruction <= ID_INSTRUCTION; 
                     index <= index + 1;
                 end
             end
