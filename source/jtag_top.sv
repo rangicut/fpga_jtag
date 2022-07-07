@@ -10,7 +10,7 @@
 
 module jtag_top
     #(
-    parameter DATA_INSTRUCTION = 10,
+    parameter DATA_INSTRUCTION = 6,
     parameter DATA_FIFO = 8,
     parameter FIFO_DEPTH = 16
     )
@@ -61,7 +61,7 @@ logic busy;
 //////////////////////////////////////////////////
 //reset counter for debugging
 //////////////////////////////////////////////////
-always_ff @(posedge clk) begin
+/*always_ff @(posedge clk) begin
     if (countrst == 0) begin
         rst <= 0;
         countrst <= countrst + 1;
@@ -77,12 +77,12 @@ always_ff @(posedge clk) begin
         countrst <= 500000002;
         rst <= 0;
     end
-end
+end*/
 
 //////////////////////////////////////////////////
 //reset counter for modeling
 //////////////////////////////////////////////////
-/*always_ff @(posedge clk) begin
+always_ff @(posedge clk) begin
     if (countrst == 0) begin
         rst <= 0;
         countrst <= countrst + 1;
@@ -98,7 +98,7 @@ end
         countrst <= 52;
         rst <= 0;
     end
-end*/
+end
 
 //////////////////////////////////////////////////
 //buffer fifo

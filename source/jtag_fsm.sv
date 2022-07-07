@@ -10,7 +10,7 @@
 
 module jtag_fsm
     #(
-    parameter DATA_INSTRUCTION = 10,
+    parameter DATA_INSTRUCTION = 6,
     parameter DATA_FIFO = 8,
     parameter FIFO_DEPTH = 16
     )
@@ -43,7 +43,7 @@ typedef enum logic [3:0] {ST_IDLE, ST_WR_INSTRUCTION,
 ST_WR_DATA, ST_DELAY} state_type;
 
 //initial constants
-localparam ID_INSTRUCTION = 10'b0000000110;
+localparam ID_INSTRUCTION = 6'b100100;
 
 //////////////////////////////////////////////////
 //local registers
@@ -102,25 +102,30 @@ always_ff @(posedge clk) begin
             end
             //////////////////////////////////////////////////
             ST_WR_DATA : begin  
-                if (index == 3) begin
+                if (index == 4) begin
                     wr_data <= 0;
                     work <= 1;
                     op <= 1;
                     state <= ST_DELAY;
-                end 
+                end
+                else if (index == 3) begin
+                    wr_data <= 1;
+                    wdata_data <= 0; 
+                    index <= index + 1; 
+                end
                 else if (index == 2) begin
                     wr_data <= 1;
-                    wdata_data <= 8'b11000100; 
+                    wdata_data <= 0; 
                     index <= index + 1;
                 end
                 else if (index == 1) begin
                     wr_data <= 1;
-                    wdata_data <= 8'b11000100; 
+                    wdata_data <= 0; 
                     index <= index + 1;
                 end
                 else if (index == 0) begin
                     wr_data <= 1;
-                    wdata_data <= 8'b11000100; 
+                    wdata_data <= 0; 
                     index <= index + 1;
                 end
             end
