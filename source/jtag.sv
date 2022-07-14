@@ -162,7 +162,7 @@ always_ff @(posedge clk) begin
                     flag_exit <= 1;
                     shift_tms <= GO_EXIT;
                     enable_tck <= 0;
-                    shift_instruction <= {shift_instruction [(DATA_FIFO - 1):0], 1'b0};
+                    shift_instruction <= {shift_instruction [(DATA_FIFO - 2):0], 1'b0};
                 end
                 else begin
                     enable_tck <= 1;
@@ -170,7 +170,7 @@ always_ff @(posedge clk) begin
                     state_reserved <= ST_INSTRUCTION;
                     count_transaction <= count_transaction + 1;
                     //shift_instruction <= {1'b0, shift_instruction [(DATA_INSTRUCTION - 1):1]};
-                    shift_instruction <= {shift_instruction [(DATA_FIFO - 1):0], 1'b0};
+                    shift_instruction <= {shift_instruction [(DATA_FIFO - 2):0], 1'b0};
                 end
             end
             //////////////////////////////////////////////////
@@ -192,7 +192,7 @@ always_ff @(posedge clk) begin
                     shift_tms <= GO_EXIT;
                     enable_tck <= 0;
                     rd_data <= 0;
-                    shift_instruction <= {shift_instruction [(DATA_FIFO - 1):0], 1'b0};
+                    shift_instruction <= {shift_instruction [(DATA_FIFO - 2):0], 1'b0};
                 end
                 else if (((!count_transaction [0]) && (!count_transaction [1]) && (!count_transaction [2])) == 1) begin
                     state <= ST_DELAY;
@@ -209,7 +209,7 @@ always_ff @(posedge clk) begin
                     state_reserved <= ST_DATA;
                     count_transaction <= count_transaction + 1;
                     //shift_instruction <= {2'b0, tdo, shift_instruction [(DATA_FIFO - 1):1]};
-                    shift_instruction <= {shift_instruction [(DATA_FIFO - 1):0], 1'b0};
+                    shift_instruction <= {shift_instruction [(DATA_FIFO - 2):0], 1'b0};
                 end
             end
             //////////////////////////////////////////////////
