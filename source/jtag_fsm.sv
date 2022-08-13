@@ -23,6 +23,9 @@ module jtag_fsm
     output logic op,
     output logic work,
     input logic busy,
+    output logic [7:0] len,
+    output logic end_op,
+    output logic conf_op,
     //FIFO_instruction
     output logic [(DATA_INSTRUCTION-1):0] wdata_instruction,
     output logic wr_instruction,
@@ -40,10 +43,12 @@ module jtag_fsm
 //////////////////////////////////////////////////
 
 typedef enum logic [3:0] {ST_IDLE, ST_WR_INSTRUCTION, 
-ST_WR_DATA, ST_DELAY} state_type;
+ST_WR_DATA, ST_DELAY, ST_ID} state_type;
 
 //initial constants
 localparam ID_INSTRUCTION = 6'b100100;
+localparam CFG_IN_INSTRUCTION = 6'b101000;
+localparam JSTART_INSTRUCTION = 6'b001100;
 
 //////////////////////////////////////////////////
 //local registers
@@ -68,6 +73,8 @@ always_ff @(posedge clk) begin
         op <=0;
         work <=0;
         initial_index <= 0;
+        end_op <= 0;
+        conf_op <= 0;
     end 
     else begin
         case (state)
@@ -82,7 +89,27 @@ always_ff @(posedge clk) begin
                     initial_index <= initial_index + 1;
                 end
                 if ((initial_index == 1) && (busy == 0)) begin
+                    state <= ST_ID;
+                    initial_index <= initial_index + 1;
+                end
+                if ((initial_index == 2) && (busy == 0)) begin
+                    state <= ST_WR_INSTRUCTION;
+                    initial_index <= initial_index + 1;
+                end
+                if ((initial_index == 3) && (busy == 0)) begin
                     state <= ST_WR_DATA;
+                    initial_index <= initial_index + 1;
+                end
+                if ((initial_index == 4) && (busy == 0)) begin
+                    state <= ST_WR_INSTRUCTION;
+                    initial_index <= initial_index + 1;
+                end
+                if ((initial_index == 5) && (busy == 0)) begin
+                    end_op <= 1;
+                    initial_index <= initial_index + 1;
+                end
+                if ((initial_index == 6) && (busy == 0)) begin
+                    end_op <= 0;
                     initial_index <= initial_index + 1;
                 end
             end
@@ -96,17 +123,24 @@ always_ff @(posedge clk) begin
                 end 
                 else if (index == 0) begin
                     wr_instruction <= 1;
-                    wdata_instruction <= ID_INSTRUCTION; 
                     index <= index + 1;
+                    case (initial_index)
+                        1: wdata_instruction <= ID_INSTRUCTION;
+                        3: wdata_instruction <= CFG_IN_INSTRUCTION; 
+                        5: wdata_instruction <= JSTART_INSTRUCTION; 
+                        default : wdata_instruction = 0;
+                    endcase
                 end
             end
             //////////////////////////////////////////////////
-            ST_WR_DATA : begin  
+            ST_ID : begin  
                 if (index == 4) begin
                     wr_data <= 0;
                     work <= 1;
                     op <= 1;
+                    len <= 32;
                     state <= ST_DELAY;
+                    conf_op <= 0;
                 end
                 else if (index == 3) begin
                     wr_data <= 1;
@@ -128,6 +162,14 @@ always_ff @(posedge clk) begin
                     wdata_data <= 0; 
                     index <= index + 1;
                 end
+            end
+            //////////////////////////////////////////////////
+            ST_WR_DATA : begin  
+                    work <= 1;
+                    op <= 1;
+                    len <= 16;
+                    state <= ST_DELAY;
+                    conf_op <= 1;
             end
             //////////////////////////////////////////////////
             ST_DELAY : begin

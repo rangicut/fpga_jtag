@@ -57,6 +57,9 @@ logic [($clog2(FIFO_DEPTH) - 1):0] usedw_data;
 logic op;
 logic work;
 logic busy;
+logic end_op;
+logic conf_op;
+logic [7:0] len;
 
 //////////////////////////////////////////////////
 //reset counter for debugging
@@ -131,7 +134,7 @@ jtag #(.FIFO_DEPTH(FIFO_DEPTH), .DATA_INSTRUCTION(DATA_INSTRUCTION), .DATA_FIFO(
         .rdata_instruction(rdata_instruction), .rd_instruction(rd_instruction), 
         .empty_instruction(empty_instruction), .rd_data(rd_data),
         .work(work), .op(op), .busy(busy), .rdata_data(rdata_data), 
-        .tdo(tdo), .tdi(tdi), .tck(tck), .tms(tms)
+        .tdo(tdo), .tdi(tdi), .tck(tck), .tms(tms), .len(len), .end_op(end_op), .conf_op(conf_op)
     );
 
 jtag_fsm #(.FIFO_DEPTH(FIFO_DEPTH), .DATA_INSTRUCTION(DATA_INSTRUCTION), .DATA_FIFO(DATA_FIFO))
@@ -141,7 +144,7 @@ jtag_fsm #(.FIFO_DEPTH(FIFO_DEPTH), .DATA_INSTRUCTION(DATA_INSTRUCTION), .DATA_F
         .full_instruction(full_instruction), .full_data(full_data),
         .wdata_data(wdata_data), .usedw_instruction(usedw_instruction),
 		.wr_data(wr_data), .usedw_data(usedw_data),
-        .work(work), .op(op), .busy(busy) 
+        .work(work), .op(op), .busy(busy), .len(len), .end_op(end_op), .conf_op(conf_op)
     );
 
 pll pll_inst (

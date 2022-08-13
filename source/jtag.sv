@@ -21,6 +21,9 @@ module jtag
     input logic rst,
     //CONTROL
     input logic op, //type of transaction, 1-data, 0-instruction
+    input logic end_op,
+    input logic conf_op,
+    input logic [7:0] len,
     input logic work,
     output logic busy,
     //JTAG
@@ -42,12 +45,14 @@ module jtag
 //Local types
 //////////////////////////////////////////////////
 
-typedef enum logic [3:0] {ST_IDLE, ST_TMS, ST_INSTRUCTION, ST_DATA, ST_DELAY, ST_RES} state_type;
+typedef enum logic [3:0] {ST_IDLE, ST_TMS, ST_INSTRUCTION, ST_DATA, ST_DELAY, ST_RES, ST_END} state_type;
 
 //initial constants
-localparam FREQUENCY_DIVIDER = 5;
+localparam CONFIG = 8'b10001110;
+localparam FREQUENCY_DIVIDER = 1;
 localparam DATA_TMS = 5;
 localparam RESET_TAP = 5'b11111;
+localparam END_TAP = 5'b00111;
 localparam GO_SHIFT_IR = 5'b01100;
 localparam GO_SHIFT_DR = 5'b00100;
 localparam GO_EXIT = 5'b11000;
@@ -109,14 +114,20 @@ always_ff @(posedge clk) begin
                 rd_data <= 0; 
                 rd_instruction <= 0; 
                 if (work == 1) begin
-                    state <= ST_DELAY;
-                    state_reserved <= ST_TMS;
                     busy <= 1;
-                    if (op == 0) begin
-                        shift_tms <= GO_SHIFT_IR;
+                    state <= ST_DELAY;
+                    if (end_op == 1) begin
+                        state_reserved <= ST_END;
+                        shift_tms <= 0;
                     end
                     else begin
-                        shift_tms <= GO_SHIFT_DR;
+                        state_reserved <= ST_TMS;
+                        if (op == 0) begin
+                            shift_tms <= GO_SHIFT_IR;
+                        end
+                        else begin
+                            shift_tms <= GO_SHIFT_DR;
+                        end
                     end
                 end 
             end
@@ -140,6 +151,36 @@ always_ff @(posedge clk) begin
                     enable_tck <= 1;
                     state <= ST_DELAY;
                     state_reserved <= ST_RES;
+                    count_transaction <= count_transaction + 1;
+                    shift_tms <= {shift_tms [(DATA_TMS - 2):0], 1'b0};
+                end
+            end
+            //////////////////////////////////////////////////
+            ST_END : begin
+                tck <= 0;
+                count <= 0;
+                if (count_transaction == 0) begin
+                    enable_tck <= 1;
+                    state <= ST_DELAY;
+                    state_reserved <= ST_END;
+                    count_transaction <= count_transaction + 1;
+                end
+                else if (count_transaction == 18) begin
+                    enable_tck <= 0;
+                    state <= ST_DELAY;
+                    state_reserved <= ST_IDLE;
+                    shift_tms <= {shift_tms [(DATA_TMS - 2):0], 1'b0};
+                end
+                else if (count_transaction == 15) begin
+                    enable_tck <= 1;
+                    state <= ST_DELAY;
+                    state_reserved <= ST_END;
+                    shift_tms <= END_TAP;
+                end
+                else begin
+                    enable_tck <= 1;
+                    state <= ST_DELAY;
+                    state_reserved <= ST_END;
                     count_transaction <= count_transaction + 1;
                     shift_tms <= {shift_tms [(DATA_TMS - 2):0], 1'b0};
                 end
@@ -184,7 +225,7 @@ always_ff @(posedge clk) begin
                     count_transaction <= count_transaction + 1;
                     rd_data <= 0;
                 end
-                else if (count_transaction == ((DATA_FIFO * 4) - 1)) begin
+                else if (count_transaction == (len - 1)) begin
                     state <= ST_DELAY;
                     state_reserved <= ST_TMS;
                     count_transaction <= 0;
@@ -197,10 +238,15 @@ always_ff @(posedge clk) begin
                 else if (((!count_transaction [0]) && (!count_transaction [1]) && (!count_transaction [2])) == 1) begin
                     state <= ST_DELAY;
                     state_reserved <= ST_DATA;
-                    shift_instruction [(DATA_FIFO - 1):0] <= rdata_data [(DATA_FIFO - 1):0];
                     enable_tck <= 1;
-                    rd_data <= 1;
                     count_transaction <= count_transaction + 1;
+                    if (conf_op == 0) begin
+                        rd_data <= 1;
+                        shift_instruction [(DATA_FIFO - 1):0] <= rdata_data [(DATA_FIFO - 1):0];
+                    end
+                    else begin
+                        shift_instruction [(DATA_FIFO - 1):0] <= CONFIG;
+                    end
                 end
                 else begin
                     enable_tck <= 1;
@@ -247,8 +293,13 @@ always_ff @(posedge clk) begin
                         end 
                         else begin
                             state_reserved <= ST_DATA;
-                            shift_instruction [(DATA_FIFO - 1):0] <= rdata_data [(DATA_FIFO - 1):0];
-                            rd_data <= 1;
+                            if (conf_op == 0) begin
+                                rd_data <= 1;
+                                shift_instruction [(DATA_FIFO - 1):0] <= rdata_data [(DATA_FIFO - 1):0];
+                            end
+                            else begin
+                                shift_instruction [(DATA_FIFO - 1):0] <= CONFIG;
+                            end
                         end
                     end
                 end
